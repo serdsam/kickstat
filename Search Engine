@@ -1,0 +1,131 @@
+import kuzu
+# Initialize and connect to the database
+db_path = './my_football_db'
+db = kuzu.Database(db_path)
+conn = kuzu.Connection(db)
+# Function to define the schema based on the provided images
+def define_schema(connection):
+    # Add your schema definition here
+    # Example:
+    connection.execute("CREATE NODE TABLE Team(id INT64, name STRING, PRIMARY KEY (id))")
+    connection.execute("CREATE NODE TABLE Player(id INT64, name STRING, PRIMARY KEY (id))")
+    connection.execute("CREATE NODE TABLE Match(id INT64, date DATE, location STRING, PRIMARY KEY (id))")
+    connection.execute("CREATE NODE TABLE Event(id INT64, type STRING, PRIMARY KEY (id))")
+    # ... continue for other node types and relationships
+# Function to load data into the database
+def load_data(connection):
+    # Add your data loading here
+    # Example:
+    connection.execute('COPY Team FROM "teams.csv"')
+    connection.execute('COPY Player FROM "players.csv"')
+    connection.execute('COPY Match FROM "matches.csv"')
+    connection.execute('COPY Event FROM "events.csv"')
+    # ... continue for other data files
+
+# Query functions based on user input
+def find_matches_for_team(connection, team_name, location_preference):
+    location_query_part = ""
+    if location_preference == "home":
+        location_query_part = "{location: 'home'}"
+    elif location_preference == "away":
+        location_query_part = "{location: 'away'}"
+
+    query = f"""
+    MATCH (t:Team {{name: '{team_name}'}})-[:PARTICIPATED_IN]->(m:Match {location_query_part})
+    RETURN m
+    """
+    return connection.execute(query)
+def find_events_for_player_in_season(connection, player_name, season):
+    query = f"""
+    MATCH (p:Player {{name: '{player_name}'}})-[:INVOLVED_IN]->(e:Event)-[:OCCURRED_DURING]->(m:Match)-[:BELONGS_TO]->(s:Season {{name: '{season}'}})
+    RETURN e
+    """
+    return connection.execute(query)
+
+def compare_players_based_on_events(connection, player_name, event_type):
+    query = f"""
+    MATCH (p:Player {{name: '{player_name}'}})-[:INVOLVED_IN]->(e:Event {{type: '{event_type}'}})
+    RETURN p.name, count(e) as event_count
+    ORDER BY event_count DESC
+    """
+    return connection.execute(query)
+
+def find_rare_events_for_player(connection, player_name, event_type):
+    query = f"""
+    MATCH (p:Player {{name: '{player_name}'}})-[:INVOLVED_IN]->(e:Event {{type: '{event_type}'}})
+    -[:OCCURRED_DURING]->(m:Match)-[:PART_OF]->(c:Competition)
+    RETURN e, m, c
+    """
+    return connection.execute(query)
+
+# Example usage
+if __name__ == "__main__":
+    # Define the schema (only done once initially)
+    define_schema(conn)
+
+    # Load data (only done once initially)
+    load_data(conn)
+
+    # Example user input
+    user_input = {
+        'team_name': 'Arsenal',
+        'location_preference': 'home',
+        'player_name': 'M. Salah',
+        'season': '2022-2023',
+        'event_type': 'Goal'
+    }
+
+    # Execute queries based on user input
+    team_matches = find_matches_for_team(conn, user_input['team_name'], user_input['location_preference'])
+    player_events = find_events_for_player_in_season(conn, user_input['player_name'], user_input['season'])
+    player_comparison = compare_players_based_on_events(conn, user_input['player_name'], user_input['event_type'])
+    rare_events = find_rare_events_for_player(conn, user_input['player_name'], 'Red Card')
+ # Process and print results (here you would format them as needed)
+    print("Team Matches:")
+    for match in team_matches:
+        print(match)
+
+    print("Player Events:")
+    for event in player_events:
+        print(event)
+
+    print("Player Comparison:")
+    for comparison in player_comparison:
+        print(comparison)
+
+    print("Rare Events:")
+    for event in rare_events:
+        print(event)
+# Documentation:
+
+
+# Python Query Engine for Football Match Knowledge Graph
+# This documentation outlines the development and usage of a Python query engine for a knowledge graph of football matches. The knowledge graph is structured according to a schema that includes entities such as teams, players, matches, and events, and their interrelationships.
+
+# Schema Definition
+# The knowledge graph schema includes tables for nodes and relationships. Nodes represent entities such as Team, Player, Match, and Event. Relationships connect nodes, representing how they are related, such as a player participating in a match or an event occurring during a match.
+# The define_schema function initializes the database with this schema, creating node tables with their respective properties and primary keys, as well as relationship tables defining how nodes are connected.
+
+# Query Execution
+# find_matches_for_team
+# This function retrieves matches for a specific team, filtered by location preference (home, away, or both). It constructs a Cypher query that matches the Team node with the given team_name and finds related Match nodes based on the location_preference.
+# find_events_for_player_in_season
+# This function fetches all events a player was involved in during a specific season. It constructs a Cypher query that finds the Player node, the Event nodes related to that player, and filters by the Match nodes belonging to the specified season.
+# compare_players_based_on_events
+# This function compares players based on the count of a specific type of event they were involved in. It constructs a Cypher query that matches the Player node and counts the Event nodes of a given event_type, sorting the results to provide a comparison.
+# find_rare_events_for_player
+# This function is used to query rare events for a player and is designed to "hop" through the graph to retrieve related matches and competitions. It demonstrates how to extend a Cypher query to traverse multiple relationships.
+
+
+# Usage Example
+# The script is executed in a command-line environment. After defining the schema and loading data once, the user can perform various queries based on the input provided.
+# Example user input structure:
+# user_input = {
+#  'team_name': 'Arsenal',
+#  'location_preference': 'home',
+#  'player_name': 'M. Salah',
+#  'season': '2022-2023',
+#  'event_type': 'Goal'
+# }The results from each query function are printed to the console, but in a production environment, they would typically be returned to a frontend application or further processed.
+
+
